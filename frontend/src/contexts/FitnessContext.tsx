@@ -64,24 +64,13 @@ export const FitnessProvider: React.FC<FitnessProviderProps> = ({
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  // Prevent premature redirects before we read localStorage
-  const [authInitializing, setAuthInitializing] = useState(true);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   // State to track current user ID for reactive queries
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-
-  // Check for stored user on mount
-  useEffect(() => {
-    const storedUserId = localStorage.getItem("currentUserId");
-    if (storedUserId) {
-      setCurrentUserId(storedUserId);
-    }
-    // Mark initialization complete; if a user exists, the user query will load next
-    setAuthInitializing(false);
-    // No auto-login - users must sign up or sign in manually
-  }, []);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(() =>
+    typeof window !== "undefined" ? localStorage.getItem("currentUserId") : null
+  );
 
   // Query for current user data
   const { data: userData, isLoading: userLoading } = useQuery({
@@ -384,8 +373,8 @@ export const FitnessProvider: React.FC<FitnessProviderProps> = ({
   const contextValue: FitnessContextType = {
     currentUser,
     userProfile,
-    // Expose loading as true while initializing or while fetching user
-    isLoading: authInitializing || userLoading,
+    // Expose loading while fetching user data
+    isLoading: userLoading,
     isAuthenticated,
     todaysActivity,
     signIn,
