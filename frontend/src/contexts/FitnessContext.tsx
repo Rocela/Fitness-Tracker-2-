@@ -63,7 +63,6 @@ export const FitnessProvider: React.FC<FitnessProviderProps> = ({
 }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -90,13 +89,32 @@ export const FitnessProvider: React.FC<FitnessProviderProps> = ({
     if (userData) {
       setCurrentUser(userData);
       setUserProfile(DataConverter.userToProfile(userData));
-      setIsAuthenticated(true);
     } else {
       setCurrentUser(null);
       setUserProfile(null);
-      setIsAuthenticated(false);
     }
   }, [userData]);
+
+  // On first load, hydrate from legacy/local user cache to avoid logout flicker
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!currentUserId) {
+      const raw = localStorage.getItem("fitness_user");
+      if (raw) {
+        try {
+          const cached = JSON.parse(raw) as User;
+          if (cached && cached.id) {
+            setCurrentUser(cached);
+            setUserProfile(DataConverter.userToProfile(cached));
+            setCurrentUserId(String(cached.id));
+          }
+        } catch (err) {
+          // Bad cache; clear it
+          localStorage.removeItem("fitness_user");
+        }
+      }
+    }
+  }, [currentUserId]);
 
   // Invalidate today's activity query when currentUser changes
   useEffect(() => {
@@ -146,6 +164,7 @@ export const FitnessProvider: React.FC<FitnessProviderProps> = ({
     },
     onSuccess: (user) => {
       localStorage.setItem("currentUserId", user.id.toString());
+      localStorage.setItem("fitness_user", JSON.stringify(user));
       setCurrentUserId(user.id.toString());
       queryClient.invalidateQueries({ queryKey: ["currentUser"] });
       toast({
@@ -169,6 +188,7 @@ export const FitnessProvider: React.FC<FitnessProviderProps> = ({
     },
     onSuccess: (user) => {
       localStorage.setItem("currentUserId", user.id.toString());
+      localStorage.setItem("fitness_user", JSON.stringify(user));
       setCurrentUserId(user.id.toString());
       queryClient.invalidateQueries({ queryKey: ["currentUser"] });
       toast({
@@ -286,11 +306,11 @@ export const FitnessProvider: React.FC<FitnessProviderProps> = ({
 
   const signOut = () => {
     localStorage.removeItem("currentUserId");
+    localStorage.removeItem("fitness_user");
     setCurrentUserId(null);
     queryClient.clear();
     setCurrentUser(null);
     setUserProfile(null);
-    setIsAuthenticated(false);
     toast({
       title: "Signed out",
       description: "You have been signed out successfully.",
@@ -369,6 +389,9 @@ export const FitnessProvider: React.FC<FitnessProviderProps> = ({
   const refreshData = () => {
     queryClient.invalidateQueries();
   };
+
+  // Consider presence of a stored user ID as authenticated to avoid refresh logout
+  const isAuthenticated = !!currentUserId;
 
   const contextValue: FitnessContextType = {
     currentUser,
